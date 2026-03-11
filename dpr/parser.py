@@ -29,7 +29,7 @@ COL_PAYMENT_TYPE = "Payment Type"
 COL_RECEIPT = "Receipt Saved"
 COL_COMMENT = "Comment"
 
-REQUIRED_COLS = [COL_MRN, COL_DOS, COL_SERVICE, COL_CHARGE]
+REQUIRED_COLS = [COL_DOS, COL_SERVICE, COL_CHARGE]
 
 # ---------------------------------------------------------------------------
 # Mapping from normalized header text → canonical column name
@@ -64,7 +64,27 @@ _HEADER_MAP: dict[str, str] = {
 _HEADER_KEYWORDS = {
     "mrn", "date of service", "service type",
     "charge amount", "client name", "payment date",
-    "receipt saved", "reciept saved",
+    "receipt saved", "reciept saved", "comment",
+}
+
+# Inferred column layouts for headerless pastes keyed by column count
+_INFERRED_LAYOUTS: dict[int, list[str]] = {
+    4: [COL_DOS, COL_SERVICE, COL_PAYMENT_DATE, COL_CHARGE],
+    5: [COL_MRN, COL_DOS, COL_SERVICE, COL_PAYMENT_DATE, COL_CHARGE],
+    9: [
+        COL_CLIENT, COL_MRN, COL_DOS, COL_SERVICE,
+        COL_PAYMENT_DATE, COL_CHARGE, COL_PAYMENT_TYPE,
+        COL_RECEIPT, COL_COMMENT,
+    ],
+}
+
+_INFERRED_LAYOUT_NAMES: dict[int, str] = {
+    4: "4-column layout: Date of Service, Service Type, Payment Date, Charge Amount",
+    5: "5-column layout: MRN, Date of Service, Service Type, Payment Date, Charge Amount",
+    9: (
+        "9-column layout: Client Name, MRN, Date of Service, Service Type, "
+        "Payment Date, Charge Amount, Payment Type, Receipt Saved, Comment"
+    ),
 }
 
 
@@ -124,18 +144,19 @@ def parse_pasted_text(text: str) -> ParseResult:
         raw_headers = rows[0]
         data_rows = rows[1:]
     else:
-        # No header detected – use positional defaults based on typical column order
+        # No header detected – infer column layout from column count
+        ncols = len(rows[0])
+        if ncols in _INFERRED_LAYOUTS:
+            inferred = _INFERRED_LAYOUTS[ncols]
+            layout_name = _INFERRED_LAYOUT_NAMES[ncols]
+        else:
+            # Fallback: map as many 9-column names as available
+            inferred = _INFERRED_LAYOUTS[9]
+            layout_name = _INFERRED_LAYOUT_NAMES[9]
+        raw_headers = inferred[:ncols]
         warnings.append(
-            "No header row detected. Assuming column order: "
-            "Client Name, MRN, Date of Service, Service Type, "
-            "Payment Date, Charge Amount, Payment Type, Receipt Saved, Comment."
+            f"No header row detected. Using inferred {layout_name}."
         )
-        default_cols = [
-            COL_CLIENT, COL_MRN, COL_DOS, COL_SERVICE,
-            COL_PAYMENT_DATE, COL_CHARGE, COL_PAYMENT_TYPE,
-            COL_RECEIPT, COL_COMMENT,
-        ]
-        raw_headers = default_cols[: len(rows[0])]
         data_rows = rows
 
     # Map raw headers to canonical names
@@ -206,20 +227,23 @@ def parse_pasted_text(text: str) -> ParseResult:
         )
 
     # -----------------------------------------------------------------------
-    # Warn about blank MRNs
+    # Warn about missing or blank MRNs
     # -----------------------------------------------------------------------
-    blank_mrn = df[COL_MRN].str.strip().eq("")
-    if blank_mrn.any():
-        warnings.append(f"{blank_mrn.sum()} row(s) have blank MRN.")
+    if COL_MRN not in df.columns:
+        warnings.append("No MRN column detected. Each row was processed independently.")
+    else:
+        blank_mrn = df[COL_MRN].str.strip().eq("")
+        if blank_mrn.any():
+            warnings.append(f"{blank_mrn.sum()} row(s) have blank MRN.")
 
-    # -----------------------------------------------------------------------
-    # Warn about MRNs with multiple rows
-    # -----------------------------------------------------------------------
-    mrn_counts = df[COL_MRN].value_counts()
-    multi_mrn = mrn_counts[mrn_counts > 1].index.tolist()
-    if multi_mrn:
-        warnings.append(
-            f"MRN(s) with multiple rows: {', '.join(str(m) for m in multi_mrn)}"
-        )
+        # -------------------------------------------------------------------
+        # Warn about MRNs with multiple rows
+        # -------------------------------------------------------------------
+        mrn_counts = df[COL_MRN].value_counts()
+        multi_mrn = mrn_counts[mrn_counts > 1].index.tolist()
+        if multi_mrn:
+            warnings.append(
+                f"MRN(s) with multiple rows: {', '.join(str(m) for m in multi_mrn)}"
+            )
 
     return ParseResult(df, warnings, errors)
