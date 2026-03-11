@@ -101,11 +101,13 @@ class TestBasicParsing:
 # Column validation
 # ---------------------------------------------------------------------------
 class TestColumnValidation:
-    def test_missing_mrn_column_is_error(self):
+    def test_missing_mrn_column_warns_not_error(self):
+        """MRN is now optional; a header-row paste without MRN should warn, not error."""
         header = "Client Name\tDate of Service\tService Type\tCharge Amount"
         text = header + "\nJohn Doe\t2/23/2024\tOutpatient 53+ minutes\t170.00"
         result = parse_pasted_text(text)
-        assert any("MRN" in e for e in result.errors)
+        assert not result.errors
+        assert any("MRN" in w for w in result.warnings)
 
     def test_missing_dos_column_is_error(self):
         header = "Client Name\tMRN\tService Type\tCharge Amount"
@@ -212,3 +214,76 @@ class TestWarnings:
         text = HEADER + "\n" + make_row(mrn="")
         result = parse_pasted_text(text)
         assert any("blank mrn" in w.lower() for w in result.warnings)
+
+
+# ---------------------------------------------------------------------------
+# Headerless paste inference
+# ---------------------------------------------------------------------------
+class TestHeaderlessPaste:
+    def test_5col_layout_no_error(self):
+        """5-column headerless paste should parse without errors."""
+        text = "12345\t2/23/2024\tOutpatient 53+ minutes\t3/1/2024\t175.00"
+        result = parse_pasted_text(text)
+        assert not result.errors
+        assert len(result.df) == 1
+        assert result.df[COL_CHARGE].iloc[0] == 175.0
+        assert result.df[COL_MRN].iloc[0] == "12345"
+
+    def test_5col_layout_inferred_warning(self):
+        """5-column headerless paste should warn about inferred layout."""
+        text = "12345\t2/23/2024\tOutpatient 53+ minutes\t3/1/2024\t175.00"
+        result = parse_pasted_text(text)
+        assert any("5-column layout" in w for w in result.warnings)
+
+    def test_4col_layout_no_error(self):
+        """4-column headerless paste should parse without errors (no MRN)."""
+        text = "2/23/2024\tOutpatient 53+ minutes\t3/1/2024\t$175.00"
+        result = parse_pasted_text(text)
+        assert not result.errors
+        assert len(result.df) == 1
+        assert result.df[COL_CHARGE].iloc[0] == 175.0
+        assert COL_MRN not in result.df.columns
+
+    def test_4col_layout_inferred_warning(self):
+        """4-column headerless paste should warn about inferred 4-column layout."""
+        text = "2/23/2024\tOutpatient 53+ minutes\t3/1/2024\t175.00"
+        result = parse_pasted_text(text)
+        assert any("4-column layout" in w for w in result.warnings)
+
+    def test_4col_no_mrn_warns(self):
+        """4-column headerless paste (no MRN column) should warn about MRN."""
+        text = "2/23/2024\tOutpatient 53+ minutes\t3/1/2024\t175.00"
+        result = parse_pasted_text(text)
+        assert any("no mrn column" in w.lower() for w in result.warnings)
+
+    def test_9col_layout_no_error(self):
+        """9-column headerless paste should parse without errors."""
+        text = "Test Client\t12345\t2/23/2024\tOutpatient 53+ minutes\t3/1/2024\t175.00\tInsurance\tYes\t"
+        result = parse_pasted_text(text)
+        assert not result.errors
+        assert result.df[COL_MRN].iloc[0] == "12345"
+        assert result.df[COL_CHARGE].iloc[0] == 175.0
+
+    def test_9col_layout_inferred_warning(self):
+        """9-column headerless paste should warn about inferred 9-column layout."""
+        text = "Test Client\t12345\t2/23/2024\tOutpatient 53+ minutes\t3/1/2024\t175.00\tInsurance\tYes\t"
+        result = parse_pasted_text(text)
+        assert any("9-column layout" in w for w in result.warnings)
+
+    def test_5col_multiple_rows(self):
+        """Multiple 5-column headerless rows should all parse correctly."""
+        rows = [
+            "11111\t2/1/2024\tOutpatient 53+ minutes\t3/1/2024\t$100.00",
+            "22222\t2/2/2024\tOutpatient 53+ minutes\t3/2/2024\t$200.00",
+        ]
+        result = parse_pasted_text("\n".join(rows))
+        assert not result.errors
+        assert len(result.df) == 2
+        assert result.df[COL_CHARGE].tolist() == [100.0, 200.0]
+
+    def test_4col_dollar_sign_charge(self):
+        """Dollar signs and commas in charge should be stripped in 4-col layout."""
+        text = "2/23/2024\tOutpatient 53+ minutes\t3/1/2024\t$1,000.00"
+        result = parse_pasted_text(text)
+        assert not result.errors
+        assert result.df[COL_CHARGE].iloc[0] == 1000.0
