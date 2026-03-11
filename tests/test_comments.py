@@ -147,7 +147,7 @@ class TestDuplicateMRNManyRows:
         df = parse(self._build_text())
         out_df, _, _ = generate_comments(df)
         comment = out_df[COMMENT_COL].iloc[0]
-        assert comment.startswith("$1075.00")
+        assert comment.startswith("$1,075.00")
 
     def test_chronological_order_in_comment(self):
         df = parse(self._build_text())
