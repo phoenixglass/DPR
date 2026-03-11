@@ -32,8 +32,8 @@ def _format_date(dt) -> str:
 
 
 def _format_money(amount: float) -> str:
-    """Return $X.XX string."""
-    return f"${amount:.2f}"
+    """Return $X,XXX.XX string with comma thousands separator."""
+    return f"${amount:,.2f}"
 
 
 def _comment_entry_sort_key(entry: tuple) -> tuple:
