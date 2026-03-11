@@ -5,12 +5,18 @@
 
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
 from dpr.parser import parse_pasted_text
 from dpr.comments import generate_comments, comments_only_text
 from dpr.clipboard import copy_button_html
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+PANES = ["Wilt", "Chap", "Hunt"]
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -23,117 +29,15 @@ st.set_page_config(
 
 st.title("DPR Comment Generator")
 st.caption(
-    "Paste Excel rows into any or all boxes below, then click **Process All**."
+    "Paste Excel rows into any or all tabs below, then click **Generate**."
 )
 
 # ---------------------------------------------------------------------------
-# UI styling (paste panes)
+# Input: tabbed paste areas
 # ---------------------------------------------------------------------------
-st.markdown(
-    """
-<style>
-/* Container boxes */
-.dpr-pane {
-  padding: 14px 14px 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(0,0,0,0.12);
-  margin-bottom: 10px;
-}
-.dpr-pane .dpr-pane-title {
-  margin: 0 0 10px 0;
-  padding: 0;
-  font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
+input_tab_wilt, input_tab_chap, input_tab_hunt = st.tabs(["Wilt", "Chap", "Hunt"])
 
-/* Color themes */
-.dpr-hunt { background: #F6D7C9; border-color: rgba(166, 92, 61, 0.35); }
-.dpr-chap { background: #E6DDF5; border-color: rgba(92, 72, 150, 0.35); }
-.dpr-wilt { background: #D9E8F7; border-color: rgba(44, 99, 163, 0.35); }
-
-/* Make the embedded textarea look like it's part of the colored pane */
-.dpr-pane [data-testid=\"stTextArea\"] textarea {
-  background: rgba(255,255,255,0.72);
-  border: 1px solid rgba(0,0,0,0.18);
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-
-# ---------------------------------------------------------------------------
-# Helper: render one pane's results
-# ---------------------------------------------------------------------------
-def render_pane_results(pane_name: str, raw_text: str) -> None:
-    """Parse and process pasted text for one pane, rendering all results inline."""
-    if not raw_text or not raw_text.strip():
-        return
-
-    # --- Parse ---
-    result = parse_pasted_text(raw_text)
-
-    for err in result.errors:
-        st.error(f"**{pane_name} — Error:** {err}")
-    for warn in result.warnings:
-        st.warning(f"**{pane_name} — Warning:** {warn}")
-
-    if result.errors or result.df.empty:
-        return
-
-    # --- Preview raw parsed table ---
-    with st.expander(f"{pane_name} — Parsed Input ({len(result.df)} rows)", expanded=False):
-        display_cols = [c for c in result.df.columns if not c.startswith("_")]
-        st.dataframe(result.df[display_cols], use_container_width=True)
-
-    # --- Generate comments ---
-    processed_df, gen_warnings, unmapped = generate_comments(result.df)
-
-    for warn in gen_warnings:
-        st.warning(f"**{pane_name} — Warning:** {warn}")
-
-    # --- Show processed table ---
-    st.markdown(f"**{pane_name} — Processed Output**")
-    display_cols = [c for c in processed_df.columns if not c.startswith("_")]
-    st.dataframe(processed_df[display_cols], use_container_width=True)
-
-    # --- Comments + copy ---
-    st.markdown(f"**{pane_name} — Comments**")
-    c_text = comments_only_text(processed_df)
-
-    # Show comments in a read-only text area, with a single copy button (like your screenshot).
-    # Streamlit doesn't have a native copy icon for text areas, so we keep using our HTML copy button.
-    st.text_area(
-        label="",
-        value=c_text,
-        height=260,
-        key=f"{pane_name}_comments_text",
-        label_visibility="collapsed",
-    )
-
-    components.html(
-        copy_button_html(c_text, f"📋 Copy Comments ({pane_name})", key=f"{pane_name}_comments"),
-        height=45,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Paste areas
-# ---------------------------------------------------------------------------
-st.markdown("---")
-
-col_wilt, col_chap, col_hunt = st.columns(3)
-
-with col_wilt:
-    st.markdown(
-        """
-<div class=\"dpr-pane dpr-wilt\">
-  <div class=\"dpr-pane-title\">WILT</div>
-""",
-        unsafe_allow_html=True,
-    )
-    st.subheader("Wilt")
+with input_tab_wilt:
     wilt_text = st.text_area(
         "Paste Wilt rows here",
         height=250,
@@ -141,17 +45,8 @@ with col_wilt:
         label_visibility="collapsed",
         placeholder="Paste Excel rows (with or without header)…",
     )
-    st.markdown("</div>", unsafe_allow_html=True)
 
-with col_chap:
-    st.markdown(
-        """
-<div class=\"dpr-pane dpr-chap\">
-  <div class=\"dpr-pane-title\">CHAP</div>
-""",
-        unsafe_allow_html=True,
-    )
-    st.subheader("Chap")
+with input_tab_chap:
     chap_text = st.text_area(
         "Paste Chap rows here",
         height=250,
@@ -159,17 +54,8 @@ with col_chap:
         label_visibility="collapsed",
         placeholder="Paste Excel rows (with or without header)…",
     )
-    st.markdown("</div>", unsafe_allow_html=True)
 
-with col_hunt:
-    st.markdown(
-        """
-<div class=\"dpr-pane dpr-hunt\">
-  <div class=\"dpr-pane-title\">HUNT</div>
-""",
-        unsafe_allow_html=True,
-    )
-    st.subheader("Hunt")
+with input_tab_hunt:
     hunt_text = st.text_area(
         "Paste Hunt rows here",
         height=250,
@@ -177,24 +63,118 @@ with col_hunt:
         label_visibility="collapsed",
         placeholder="Paste Excel rows (with or without header)…",
     )
-    st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Process button
+# Generate button
 # ---------------------------------------------------------------------------
-st.markdown("---")
-process_clicked = st.button("⚙️ Process All", type="primary", use_container_width=True)
+generate_clicked = st.button("⚙️ Generate", type="primary", use_container_width=True)
 
 # ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
-if process_clicked:
+if generate_clicked:
     any_data = any([wilt_text.strip(), chap_text.strip(), hunt_text.strip()])
     if not any_data:
-        st.error("Please paste data into at least one pane before processing.")
+        st.error("Please paste data into at least one tab before generating.")
     else:
-        for pane_name, pane_text in [("Wilt", wilt_text), ("Chap", chap_text), ("Hunt", hunt_text)]:
-            if pane_text.strip():
-                st.markdown(f"## {pane_name}")
-                render_pane_results(pane_name, pane_text)
-                st.markdown("---")
+        # Process each pane and collect results
+        pane_data: dict[str, dict] = {}
+
+        for pane_name, pane_text in zip(PANES, [wilt_text, chap_text, hunt_text]):
+            if not pane_text.strip():
+                continue
+
+            parse_result = parse_pasted_text(pane_text)
+
+            for err in parse_result.errors:
+                st.error(f"**{pane_name} — Error:** {err}")
+            for warn in parse_result.warnings:
+                st.warning(f"**{pane_name} — Warning:** {warn}")
+
+            if parse_result.errors or parse_result.df.empty:
+                continue
+
+            processed_df, gen_warnings, unmapped = generate_comments(parse_result.df)
+
+            for warn in gen_warnings:
+                st.warning(f"**{pane_name} — Warning:** {warn}")
+
+            pane_data[pane_name] = {
+                "processed_df": processed_df,
+                "c_text": comments_only_text(processed_df),
+            }
+
+        if not pane_data:
+            st.stop()
+
+        # ---------------------------------------------------------------------------
+        # Output: tabbed results  [ All | Wilt | Chap | Hunt ]
+        # ---------------------------------------------------------------------------
+        st.markdown("---")
+
+        out_tab_all, out_tab_wilt, out_tab_chap, out_tab_hunt = st.tabs(
+            ["All", "Wilt", "Chap", "Hunt"]
+        )
+
+        def render_output_tab(pane_name: str, tab) -> None:
+            """Render comments + copy + expander for one pane inside a tab."""
+            with tab:
+                if pane_name not in pane_data:
+                    st.info(f"No data was pasted for **{pane_name}**.")
+                    return
+
+                data = pane_data[pane_name]
+                c_text = data["c_text"]
+                processed_df = data["processed_df"]
+
+                st.markdown("**Comments Only**")
+                st.text_area(
+                    label="",
+                    value=c_text,
+                    height=260,
+                    key=f"{pane_name}_comments_text",
+                    label_visibility="collapsed",
+                )
+                components.html(
+                    copy_button_html(
+                        c_text,
+                        f"📋 Copy",
+                        key=f"{pane_name}_comments",
+                    ),
+                    height=45,
+                )
+
+                display_cols = [c for c in processed_df.columns if not c.startswith("_")]
+                with st.expander("Show processed rows"):
+                    st.dataframe(processed_df[display_cols], use_container_width=True)
+
+        # "All" tab — combined comments from every pane in Wilt → Chap → Hunt order
+        with out_tab_all:
+            all_comments = "\n".join(
+                pane_data[p]["c_text"] for p in PANES if p in pane_data
+            )
+            all_dfs = [
+                pane_data[p]["processed_df"] for p in PANES if p in pane_data
+            ]
+
+            st.markdown("**Comments Only**")
+            st.text_area(
+                label="",
+                value=all_comments,
+                height=260,
+                key="all_comments_text",
+                label_visibility="collapsed",
+            )
+            components.html(
+                copy_button_html(all_comments, "📋 Copy", key="all_comments"),
+                height=45,
+            )
+
+            with st.expander("Show processed rows"):
+                combined_df = pd.concat(all_dfs, ignore_index=True)
+                display_cols = [c for c in combined_df.columns if not c.startswith("_")]
+                st.dataframe(combined_df[display_cols], use_container_width=True)
+
+        render_output_tab(PANES[0], out_tab_wilt)
+        render_output_tab(PANES[1], out_tab_chap)
+        render_output_tab(PANES[2], out_tab_hunt)
