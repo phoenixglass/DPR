@@ -1,7 +1,7 @@
-DPR Comment Generator — Streamlit App
-
-Clipboard-first tool for generating DPR billing comments from pasted Excel rows.
-Three independent paste areas: Wilt, Chap, Hunt.
+# DPR Comment Generator - Streamlit App
+#
+# Clipboard-first tool for generating DPR billing comments from pasted Excel rows.
+# Three independent paste areas: Wilt, Chap, Hunt.
 
 from __future__ import annotations
 
