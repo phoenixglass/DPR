@@ -75,6 +75,12 @@ def generate_comments(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str], list[s
     df = df.copy().reset_index(drop=True)
     original_index = df.index.tolist()   # [0, 1, 2, …] — used for the final assert
 
+    # If no MRN column is present, assign a unique synthetic MRN per row so
+    # that each row is processed independently (mirrors parser warning).
+    _synthetic_mrn = COL_MRN not in df.columns
+    if _synthetic_mrn:
+        df[COL_MRN] = [f"_row_{i}" for i in range(len(df))]
+
     warnings: list[str] = []
     unmapped_services: list[str] = []
 
@@ -132,6 +138,10 @@ def generate_comments(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str], list[s
         warnings.append(
             f"MRN {mrn}: unmapped service type(s): {', '.join(repr(s) for s in svcs)}"
         )
+
+    # Remove the synthetic MRN column so it doesn't appear in the output table.
+    if _synthetic_mrn:
+        df = df.drop(columns=[COL_MRN])
 
     return df, warnings, list(set(unmapped_services))
 
