@@ -411,3 +411,75 @@ class TestBusinessRules:
         # MRN column (second tab-delimited field) must follow paste order
         data_mrns = [line.split("\t")[1] for line in lines[1:]]
         assert data_mrns == ["AAA", "BBB", "AAA", "CCC", "BBB"]
+
+
+# ---------------------------------------------------------------------------
+# No-MRN input (4-column paste without MRN header)
+# ---------------------------------------------------------------------------
+class TestNoMRNColumn:
+    """generate_comments must not raise KeyError when MRN column is absent."""
+
+    _4COL_HEADER = "Date of Service\tService Type\tPayment Date\tCharge Amount"
+
+    def _make_4col_row(self, dos: str, service: str, payment_date: str, charge: str) -> str:
+        return f"{dos}\t{service}\t{payment_date}\t{charge}"
+
+    def _parse_4col(self, text: str) -> pd.DataFrame:
+        result = parse_pasted_text(text)
+        assert not result.errors, f"Parse errors: {result.errors}"
+        assert COL_MRN not in result.df.columns, "Expected no MRN column in 4-col parse"
+        return result.df
+
+    def test_no_keyerror(self):
+        """Should not raise KeyError: 'MRN'."""
+        text = (
+            self._4COL_HEADER + "\n"
+            + self._make_4col_row("2/23/2024", "Outpatient 53+ minutes", "3/1/2024", "170.00")
+        )
+        df = self._parse_4col(text)
+        out_df, warnings, unmapped = generate_comments(df)  # must not raise
+        assert COMMENT_COL in out_df.columns
+
+    def test_comment_generated_for_each_row(self):
+        """Each row must have a non-empty comment."""
+        text = (
+            self._4COL_HEADER + "\n"
+            + self._make_4col_row("2/23/2024", "Outpatient 53+ minutes", "3/1/2024", "170.00") + "\n"
+            + self._make_4col_row("3/5/2024", "IOP Chappaqua", "3/10/2024", "85.00")
+        )
+        df = self._parse_4col(text)
+        out_df, _, _ = generate_comments(df)
+        assert out_df[COMMENT_COL].notna().all()
+        assert (out_df[COMMENT_COL].astype(str).str.strip() != "").all()
+
+    def test_each_row_independent(self):
+        """Without MRN, rows must each get their own independent comment."""
+        text = (
+            self._4COL_HEADER + "\n"
+            + self._make_4col_row("2/23/2024", "Outpatient 53+ minutes", "3/1/2024", "170.00") + "\n"
+            + self._make_4col_row("3/5/2024", "IOP Chappaqua", "3/10/2024", "85.00")
+        )
+        df = self._parse_4col(text)
+        out_df, _, _ = generate_comments(df)
+        # Rows have different services/charges so their comments should differ
+        assert out_df[COMMENT_COL].iloc[0] != out_df[COMMENT_COL].iloc[1]
+
+    def test_synthetic_mrn_not_in_output(self):
+        """The synthetic MRN column must not appear in the result."""
+        text = (
+            self._4COL_HEADER + "\n"
+            + self._make_4col_row("2/23/2024", "Outpatient 53+ minutes", "3/1/2024", "170.00")
+        )
+        df = self._parse_4col(text)
+        out_df, _, _ = generate_comments(df)
+        assert COL_MRN not in out_df.columns
+
+    def test_comment_format(self):
+        """Comment must follow the standard $X.XX m/d label format."""
+        text = (
+            self._4COL_HEADER + "\n"
+            + self._make_4col_row("2/23/2024", "Outpatient 16-37 minutes", "3/1/2024", "24.00")
+        )
+        df = self._parse_4col(text)
+        out_df, _, _ = generate_comments(df)
+        assert out_df[COMMENT_COL].iloc[0] == "$24.00 2/23 IT 16-37"
