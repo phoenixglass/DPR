@@ -50,6 +50,16 @@ class TestStandardMappings:
         assert label == "Psych f/u 30-39"
         assert not unmapped
 
+    def test_psych_fu_20_29_no_parens(self):
+        label, unmapped = map_service("Psych Appointment 20-29")
+        assert label == "Psych f/u 20-29"
+        assert not unmapped
+
+    def test_psych_fu_30_39_no_parens(self):
+        label, unmapped = map_service("Psych Appointment 30-39")
+        assert label == "Psych f/u 30-39"
+        assert not unmapped
+
     def test_psych_eval_psychiatric(self):
         label, unmapped = map_service("Psychiatric Diag. Eval. W. Med Services")
         assert label == "Psych Eval"
@@ -138,6 +148,11 @@ class TestTelemedMappings:
     def test_tele_op_psych_fu(self):
         label, unmapped = map_service("Telemed OP: Psych Appointment (30-39 minutes)")
         assert label == "Tele Psych f/u 30-39"
+        assert not unmapped
+
+    def test_tele_op_psych_fu_no_parens(self):
+        label, unmapped = map_service("Telemed OP: Psych Appointment (20-29 minutes)")
+        assert label == "Tele Psych f/u 20-29"
         assert not unmapped
 
     def test_tele_assess(self):
