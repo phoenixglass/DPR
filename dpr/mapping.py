@@ -57,12 +57,15 @@ for _pat, _label in _RAW_PATTERNS:
 # Two forms:
 #   1. "OP: Psych Appointment (30-39 minutes)"  — standard, non-telemed
 #   2. "Psych Appointment (30-39 minutes)"       — after Telemed OP: prefix is stripped
+# Both forms also accept the time range without parentheses, e.g. "Psych Appointment 20-29",
+# or with a leading parenthesis only, e.g. "Psych Appointment (30-39".
+# Parentheses are therefore optional (both opening and closing) by design.
 _PSYCH_FU_RE = re.compile(
-    r"op:\s*psych\s+(?:appointment|follow[.\s-]up)\s*\((\d+-\d+)\s+minutes?\)",
+    r"op:\s*psych\s+(?:appointment|follow[.\s-]up)\s*\(?(\d+-\d+)(?:\s+minutes?)?\)?",
     re.IGNORECASE,
 )
 _PSYCH_FU_BARE_RE = re.compile(
-    r"^psych\s+(?:appointment|follow[.\s-]up)\s*\((\d+-\d+)\s+minutes?\)",
+    r"^psych\s+(?:appointment|follow[.\s-]up)\s*\(?(\d+-\d+)(?:\s+minutes?)?\)?",
     re.IGNORECASE,
 )
 
