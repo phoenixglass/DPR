@@ -183,13 +183,36 @@ if generate_clicked:
                         for w in warnings:
                             st.warning(w)
 
+                import html as _html
+                from dpr.parser import COL_SERVICE as _COL_SERVICE, COL_CHARGE as _COL_CHARGE
+                from dpr.comments import COMMENT_COL as _COMMENT_COL
+
+                comment_lines_html = []
+                for _, _row in processed_df.iterrows():
+                    _comment = str(_row.get(_COMMENT_COL, ""))
+                    if not _comment or _comment == "nan" or not _comment.strip():
+                        continue
+                    _service = str(_row.get(_COL_SERVICE, "")).lower()
+                    try:
+                        _charge = float(_row.get(_COL_CHARGE, 0))
+                    except (TypeError, ValueError):
+                        _charge = 0.0
+                    _escaped = _html.escape(_comment)
+                    if "outpatient" in _service and _charge == 295.0:
+                        comment_lines_html.append(
+                            f'<span style="color: #7B0000;">{_escaped}</span>'
+                        )
+                    else:
+                        comment_lines_html.append(_escaped)
+
                 st.markdown("**Comments Only**")
-                st.text_area(
-                    label="",
-                    value=c_text,
-                    height=260,
-                    key=f"{pane_name}_comments_text",
-                    label_visibility="collapsed",
+                st.markdown(
+                    '<div style="background-color: #f0f2f6; border: 1px solid #d0d0d0;'
+                    " border-radius: 4px; padding: 8px 12px; height: 260px;"
+                    ' overflow-y: auto; font-size: 14px; line-height: 1.6;">'
+                    + "<br>".join(comment_lines_html)
+                    + "</div>",
+                    unsafe_allow_html=True,
                 )
                 components.html(
                     copy_button_html(
