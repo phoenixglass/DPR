@@ -201,8 +201,25 @@ if generate_clicked:
                 )
 
                 display_cols = [c for c in processed_df.columns if not c.startswith("_")]
+                display_df = processed_df[display_cols]
+
+                def _highlight_outpatient_295(row: "pd.Series") -> list[str]:
+                    """Turn row red when service contains 'outpatient' and charge is $295."""
+                    from dpr.parser import COL_SERVICE, COL_CHARGE
+                    service = str(row.get(COL_SERVICE, "")).lower()
+                    try:
+                        charge = float(row.get(COL_CHARGE, 0))
+                    except (TypeError, ValueError):
+                        charge = 0.0
+                    if "outpatient" in service and charge == 295.0:
+                        return ["background-color: #FFCCCC; color: #7B0000"] * len(row)
+                    return [""] * len(row)
+
                 with st.expander("Show processed rows"):
-                    st.dataframe(processed_df[display_cols], use_container_width=True)
+                    st.dataframe(
+                        display_df.style.apply(_highlight_outpatient_295, axis=1),
+                        use_container_width=True,
+                    )
 
         render_output_tab(PANES[0], out_tab_wilt)
         render_output_tab(PANES[1], out_tab_chap)
