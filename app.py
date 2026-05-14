@@ -8,7 +8,7 @@ from __future__ import annotations
 import streamlit as st
 import streamlit.components.v1 as components
 
-from dpr.parser import parse_pasted_text
+from dpr.parser import parse_pasted_text, COL_MRN
 from dpr.comments import generate_comments, comments_only_text
 from dpr.clipboard import copy_button_html
 
@@ -147,10 +147,23 @@ if generate_clicked:
 
             all_warnings = list(parse_result.warnings) + list(gen_warnings)
 
+            if COL_MRN in parse_result.df.columns:
+                mrn_count = (
+                    parse_result.df[COL_MRN]
+                    .astype(str)
+                    .str.strip()
+                    .loc[lambda s: s.ne("")]
+                    .nunique()
+                )
+            else:
+                # No MRN column — each row was processed independently.
+                mrn_count = len(processed_df)
+
             pane_data[pane_name] = {
                 "processed_df": processed_df,
                 "c_text": comments_only_text(processed_df),
                 "warnings": all_warnings,
+                "mrn_count": mrn_count,
             }
 
         if not pane_data:
@@ -174,6 +187,10 @@ if generate_clicked:
                 c_text = data["c_text"]
                 processed_df = data["processed_df"]
                 warnings = data["warnings"]
+                mrn_count = data["mrn_count"]
+
+                # Total MRN count — always visible, no click required
+                st.metric(f"{pane_name} — Total MRNs", mrn_count)
 
                 # Warnings — collapsed expander, only shown when there are warnings
                 if warnings:
