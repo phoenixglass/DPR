@@ -148,22 +148,28 @@ if generate_clicked:
             all_warnings = list(parse_result.warnings) + list(gen_warnings)
 
             if COL_MRN in parse_result.df.columns:
-                mrn_count = (
+                mrn_set = set(
                     parse_result.df[COL_MRN]
                     .astype(str)
                     .str.strip()
                     .loc[lambda s: s.ne("")]
-                    .nunique()
+                    .tolist()
                 )
+                mrn_count = len(mrn_set)
+                rowless_count = 0
             else:
                 # No MRN column — each row was processed independently.
+                mrn_set = set()
                 mrn_count = len(processed_df)
+                rowless_count = len(processed_df)
 
             pane_data[pane_name] = {
                 "processed_df": processed_df,
                 "c_text": comments_only_text(processed_df),
                 "warnings": all_warnings,
                 "mrn_count": mrn_count,
+                "mrn_set": mrn_set,
+                "rowless_count": rowless_count,
             }
 
         if not pane_data:
@@ -173,6 +179,14 @@ if generate_clicked:
         # Output: tabbed results  [ Wilt | Chap | Hunt ]
         # ---------------------------------------------------------------------------
         st.markdown("---")
+
+        combined_mrns: set[str] = set()
+        combined_rowless = 0
+        for _data in pane_data.values():
+            combined_mrns |= _data["mrn_set"]
+            combined_rowless += _data["rowless_count"]
+        total_unique_mrns = len(combined_mrns) + combined_rowless
+        st.metric("All Locations — Total Unique MRNs", total_unique_mrns)
 
         out_tab_wilt, out_tab_chap, out_tab_hunt = st.tabs(["Wilt", "Chap", "Hunt"])
 
